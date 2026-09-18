@@ -518,54 +518,51 @@ function downloadHTML(){
 const SHARED_API='https://script.google.com/macros/s/AKfycbx-vivjo4hnxRe63mCpSVBQUy1DD8dTKhSkhtOiJKyU9IzEaMsikuJNdov1Tr1BPWY/exec';
 let pubTimer=null, pending=false, publishing=false;
 let sharedSaveTimer=null, sharedSavePending=false, DIRTY_FIELD=null, DIRTY_ID=null;
+const IN_APPS_SCRIPT = new URLSearchParams(location.search).get('appsScript')==='1';
+
 function persist(id,field){
   try{ localStorage.setItem(LSKEY, JSON.stringify({t:Date.now(), s:STATE, g:EXTRA_GROUPS, m:META})); }catch(e){}
   if(id!=null&&field){ DIRTY_ID=id; DIRTY_FIELD=field; }
   setSave('Autosaving…',true);
-  sharedSavePending=true;
   clearTimeout(sharedSaveTimer);
-  sharedSaveTimer=setTimeout(()=>saveShared(),500);
+  sharedSaveTimer=setTimeout(()=>saveShared(),350);
 }
-async function saveShared(){
-  if(publishing){ sharedSavePending=true; return; }
+function saveShared(){
   const id=DIRTY_ID, field=DIRTY_FIELD;
-  if(id==null||!field){ setSave('Shared tracker · latest data loaded',false); return; }
-  const item=STATE.find(x=>String(x.id)===String(id));
-  if(!item)return;
-  const expected=String(item[field]??'');
-  publishing=true; sharedSavePending=false;
-  setSave('Autosaving…',true);
-  try{
-    // Google Apps Script may redirect cross-origin GET responses to an HTML interstitial.
-    // Send the update as a navigation-safe request, then verify it with the normal data GET.
-    const updateUrl=SHARED_API+'?action=update&id='+encodeURIComponent(id)+'&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(expected)+'&_='+Date.now();
-    await fetch(updateUrl,{mode:'no-cors',cache:'no-store'});
-    await new Promise(r=>setTimeout(r,650));
-    const verifyRes=await fetch(SHARED_API+'?_='+Date.now(),{cache:'no-store'});
-    const verify=await verifyRes.json();
-    if(!verify.success||!Array.isArray(verify.data))throw new Error('Could not verify shared data');
-    const saved=verify.data.find(r=>String(r.id)===String(id));
-    if(!saved||String(saved[field]??'')!==expected)throw new Error('Google Sheet did not confirm the change');
-    try{localStorage.removeItem(LSKEY)}catch(e){}
-    setSave('Shared tracker autosaved ✓',false);
-  }catch(e){
-    setSave('Autosave failed · '+(e.message||'please retry'),true);
-  }finally{
-    publishing=false;
-    if(sharedSavePending){ clearTimeout(sharedSaveTimer); sharedSaveTimer=setTimeout(()=>saveShared(),500); }
+  if(id==null||!field)return;
+  const item=STATE.find(x=>String(x.id)===String(id)); if(!item)return;
+  if(IN_APPS_SCRIPT){
+    parent.postMessage({type:'V606_SAVE_FIELD',id:String(id),field:field,value:String(item[field]??'')},'*');
+  }else{
+    setSave('Open the shared Apps Script tracker to edit',true);
   }
 }
+function applySharedData(data){
+  if(!Array.isArray(data))return;
+  STATE=data.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:r.date||'',rem:r.rem||'',link:r.link||''}));
+  render(); setSave('Shared tracker · latest data loaded',false);
+}
+window.addEventListener('message',e=>{
+  const msg=e.data||{};
+  if(msg.type==='V606_DATA') applySharedData(msg.data);
+  if(msg.type==='V606_SAVE_CONFIRMED') {
+    try{localStorage.removeItem(LSKEY)}catch(err){}
+    setSave('Shared tracker autosaved ✓',false);
+  }
+  if(msg.type==='V606_SAVE_FAILED') setSave('Autosave failed · please retry',true);
+});
 async function loadShared(){
   setSave('Loading shared tracker…',true);
+  if(IN_APPS_SCRIPT){
+    parent.postMessage({type:'V606_GET_DATA'},'*');
+    return;
+  }
   try{
     const res=await fetch(SHARED_API+'?_='+Date.now(),{cache:'no-store'});
     const out=await res.json();
-    if(!out.success||!Array.isArray(out.data))throw new Error(out.error||'Load failed');
-    STATE=out.data.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:r.date||'',rem:r.rem||'',link:r.link||''}));
-    render(); setSave('Shared tracker · latest data loaded',false);
-  }catch(e){
-    overlayLocal(); render(); setSave('Offline copy · shared data unavailable',true);
-  }
+    if(!out.success||!Array.isArray(out.data))throw new Error('Load failed');
+    applySharedData(out.data);
+  }catch(e){ overlayLocal(); render(); setSave('Shared data unavailable',true); }
 }
 
 function exportCSV(){
