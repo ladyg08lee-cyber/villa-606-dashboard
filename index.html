@@ -536,11 +536,16 @@ async function saveShared(){
   publishing=true; sharedSavePending=false;
   setSave('Autosaving…',true);
   try{
-    const url=SHARED_API+'?action=update&id='+encodeURIComponent(id)+'&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(expected)+'&_='+Date.now();
-    const res=await fetch(url,{cache:'no-store'});
-    const out=await res.json();
-    if(!out.success)throw new Error(out.error||'Save failed');
-    if(!out.verified||String(out.value)!==expected)throw new Error('Saved value could not be verified');
+    // Google Apps Script may redirect cross-origin GET responses to an HTML interstitial.
+    // Send the update as a navigation-safe request, then verify it with the normal data GET.
+    const updateUrl=SHARED_API+'?action=update&id='+encodeURIComponent(id)+'&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(expected)+'&_='+Date.now();
+    await fetch(updateUrl,{mode:'no-cors',cache:'no-store'});
+    await new Promise(r=>setTimeout(r,650));
+    const verifyRes=await fetch(SHARED_API+'?_='+Date.now(),{cache:'no-store'});
+    const verify=await verifyRes.json();
+    if(!verify.success||!Array.isArray(verify.data))throw new Error('Could not verify shared data');
+    const saved=verify.data.find(r=>String(r.id)===String(id));
+    if(!saved||String(saved[field]??'')!==expected)throw new Error('Google Sheet did not confirm the change');
     try{localStorage.removeItem(LSKEY)}catch(e){}
     setSave('Shared tracker autosaved ✓',false);
   }catch(e){
