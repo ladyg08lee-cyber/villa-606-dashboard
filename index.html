@@ -519,12 +519,6 @@ const SHARED_API='https://script.google.com/macros/s/AKfycbx-vivjo4hnxRe63mCpSVB
 let pubTimer=null, pending=false, publishing=false;
 let sharedSaveTimer=null, sharedSavePending=false, DIRTY_FIELD=null, DIRTY_ID=null;
 const IN_APPS_SCRIPT = new URLSearchParams(location.search).get('appsScript')==='1';
-const LIVE_APP_URL='https://script.google.com/macros/s/AKfycbx-vivjo4hnxRe63mCpSVBQUy1DD8dTKhSkhtOiJKyU9IzEaMsikuJNdov1Tr1BPWY/exec';
-if(!IN_APPS_SCRIPT){
-  // The shared editor must run as the top-level Apps Script web app so
-  // google.script.run can securely write to the shared Google Sheet.
-  window.location.replace(LIVE_APP_URL);
-}
 
 function persist(id,field){
   try{ localStorage.setItem(LSKEY, JSON.stringify({t:Date.now(), s:STATE, g:EXTRA_GROUPS, m:META})); }catch(e){}
