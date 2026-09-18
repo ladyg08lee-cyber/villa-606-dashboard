@@ -531,17 +531,28 @@ function persist(){
 }
 async function saveShared(){
   if(publishing){ sharedSavePending=true; return; }
-  publishing=true; setSave('Saving to shared tracker…',true);
+  publishing=true; setSave('Autosaving to shared tracker…',true);
   try{
-    const res=await fetch(SHARED_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({data:STATE})});
-    const out=await res.json();
-    if(!out.success)throw new Error(out.error||'Save failed');
+    // Apps Script ContentService redirects its response to googleusercontent.
+    // no-cors lets the browser send the write reliably from GitHub Pages.
+    await fetch(SHARED_API,{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({data:STATE})
+    });
     try{localStorage.removeItem(LSKEY)}catch(e){}
-    setSave('Shared tracker saved · '+out.records+' records',false);
+    setSave('Shared tracker autosaved',false);
   }catch(e){
-    setSave('Shared save failed · changes kept in this browser',true);
-    alert('Could not save to the shared tracker. Your changes remain in this browser. Please try Save again.');
-  }finally{publishing=false;if(sharedSavePending){sharedSavePending=false;clearTimeout(sharedSaveTimer);sharedSaveTimer=setTimeout(()=>saveShared(),700)}}
+    setSave('Autosave failed · changes kept in this browser',true);
+  }finally{
+    publishing=false;
+    if(sharedSavePending){
+      sharedSavePending=false;
+      clearTimeout(sharedSaveTimer);
+      sharedSaveTimer=setTimeout(()=>saveShared(),700);
+    }
+  }
 }
 async function loadShared(){
   setSave('Loading shared tracker…',true);
