@@ -386,7 +386,7 @@ function renderRows(){
           const href=normalizeDocLink(val);
           if(a){a.href=href||'#';a.classList.toggle('disabled',!href);}
         }
-        persist();
+        persist(id,f);
       });
     });
   });
@@ -517,47 +517,43 @@ function downloadHTML(){
 
 const SHARED_API='https://script.google.com/macros/s/AKfycbx-vivjo4hnxRe63mCpSVBQUy1DD8dTKhSkhtOiJKyU9IzEaMsikuJNdov1Tr1BPWY/exec';
 let pubTimer=null, pending=false, publishing=false;
-let sharedSaveTimer=null, sharedSavePending=false;
-function persist(){
+let sharedSaveTimer=null, sharedSavePending=false, DIRTY_FIELD=null, DIRTY_ID=null;
+function persist(id,field){
   try{ localStorage.setItem(LSKEY, JSON.stringify({t:Date.now(), s:STATE, g:EXTRA_GROUPS, m:META})); }catch(e){}
+  if(id!=null&&field){ DIRTY_ID=id; DIRTY_FIELD=field; }
   setSave('Autosaving…',true);
   sharedSavePending=true;
   clearTimeout(sharedSaveTimer);
-  sharedSaveTimer=setTimeout(async()=>{
-    sharedSavePending=false;
-    await saveShared();
-    if(sharedSavePending){ clearTimeout(sharedSaveTimer); sharedSaveTimer=setTimeout(()=>saveShared(),700); }
-  },700);
+  sharedSaveTimer=setTimeout(()=>saveShared(),500);
 }
 async function saveShared(){
   if(publishing){ sharedSavePending=true; return; }
-  publishing=true; setSave('Autosaving to shared tracker…',true);
+  const id=DIRTY_ID, field=DIRTY_FIELD;
+  if(id==null||!field){ setSave('Shared tracker · latest data loaded',false); return; }
+  const item=STATE.find(x=>String(x.id)===String(id));
+  if(!item)return;
+  const expected=String(item[field]??'');
+  publishing=true; sharedSavePending=false;
+  setSave('Autosaving…',true);
   try{
-    // Apps Script ContentService redirects its response to googleusercontent.
-    // no-cors lets the browser send the write reliably from GitHub Pages.
-    await fetch(SHARED_API,{
-      method:'POST',
-      mode:'no-cors',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({data:STATE})
-    });
+    const url=SHARED_API+'?action=update&id='+encodeURIComponent(id)+'&field='+encodeURIComponent(field)+'&value='+encodeURIComponent(expected)+'&_='+Date.now();
+    const res=await fetch(url,{cache:'no-store'});
+    const out=await res.json();
+    if(!out.success)throw new Error(out.error||'Save failed');
+    if(!out.verified||String(out.value)!==expected)throw new Error('Saved value could not be verified');
     try{localStorage.removeItem(LSKEY)}catch(e){}
-    setSave('Shared tracker autosaved',false);
+    setSave('Shared tracker autosaved ✓',false);
   }catch(e){
-    setSave('Autosave failed · changes kept in this browser',true);
+    setSave('Autosave failed · '+(e.message||'please retry'),true);
   }finally{
     publishing=false;
-    if(sharedSavePending){
-      sharedSavePending=false;
-      clearTimeout(sharedSaveTimer);
-      sharedSaveTimer=setTimeout(()=>saveShared(),700);
-    }
+    if(sharedSavePending){ clearTimeout(sharedSaveTimer); sharedSaveTimer=setTimeout(()=>saveShared(),500); }
   }
 }
 async function loadShared(){
   setSave('Loading shared tracker…',true);
   try{
-    const res=await fetch(SHARED_API,{cache:'no-store'});
+    const res=await fetch(SHARED_API+'?_='+Date.now(),{cache:'no-store'});
     const out=await res.json();
     if(!out.success||!Array.isArray(out.data))throw new Error(out.error||'Load failed');
     STATE=out.data.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:r.date||'',rem:r.rem||'',link:r.link||''}));
