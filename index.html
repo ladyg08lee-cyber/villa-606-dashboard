@@ -534,7 +534,7 @@ function saveShared(){
   if(IN_APPS_SCRIPT){
     parent.postMessage({type:'V606_SAVE_FIELD',id:String(id),field:field,value:String(item[field]??'')},'*');
   }else{
-    setSave('Open the shared Apps Script tracker to edit',true);
+    setSave('Shared editing requires the live tracker',true);
   }
 }
 function applySharedData(data){
@@ -597,5 +597,13 @@ render();
 (async()=>{
   capReady=true;
   await loadShared();
+  // Keep every open device synchronized with the shared Google Sheet.
+  // Do not reload while this browser is actively saving an edit.
+  setInterval(()=>{
+    if(!sharedSavePending && document.visibilityState==='visible') loadShared();
+  },15000);
 })();
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible' && !sharedSavePending) loadShared();
+});
 </script></body></html>
