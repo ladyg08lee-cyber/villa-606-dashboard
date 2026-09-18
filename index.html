@@ -521,13 +521,9 @@ let sharedSaveTimer=null, sharedSavePending=false, DIRTY_FIELD=null, DIRTY_ID=nu
 const IN_APPS_SCRIPT = new URLSearchParams(location.search).get('appsScript')==='1';
 const LIVE_APP_URL='https://script.google.com/macros/s/AKfycbx-vivjo4hnxRe63mCpSVBQUy1DD8dTKhSkhtOiJKyU9IzEaMsikuJNdov1Tr1BPWY/exec';
 if(!IN_APPS_SCRIPT){
-  window.addEventListener('DOMContentLoaded',()=>{
-    const live=document.createElement('iframe');
-    live.src=LIVE_APP_URL;
-    live.title='Villa 606 — Document Master List Tracker';
-    live.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;z-index:2147483647;background:#f7f5f1';
-    document.body.appendChild(live);
-  });
+  // The shared editor must run as the top-level Apps Script web app so
+  // google.script.run can securely write to the shared Google Sheet.
+  window.location.replace(LIVE_APP_URL);
 }
 
 function persist(id,field){
