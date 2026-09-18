@@ -517,12 +517,20 @@ function downloadHTML(){
 
 const SHARED_API='https://script.google.com/macros/s/AKfycbx-vivjo4hnxRe63mCpSVBQUy1DD8dTKhSkhtOiJKyU9IzEaMsikuJNdov1Tr1BPWY/exec';
 let pubTimer=null, pending=false, publishing=false;
+let sharedSaveTimer=null, sharedSavePending=false;
 function persist(){
   try{ localStorage.setItem(LSKEY, JSON.stringify({t:Date.now(), s:STATE, g:EXTRA_GROUPS, m:META})); }catch(e){}
-  setSave('Unsaved changes · click Save',true);
+  setSave('Autosaving…',true);
+  sharedSavePending=true;
+  clearTimeout(sharedSaveTimer);
+  sharedSaveTimer=setTimeout(async()=>{
+    sharedSavePending=false;
+    await saveShared();
+    if(sharedSavePending){ clearTimeout(sharedSaveTimer); sharedSaveTimer=setTimeout(()=>saveShared(),700); }
+  },700);
 }
 async function saveShared(){
-  if(publishing)return;
+  if(publishing){ sharedSavePending=true; return; }
   publishing=true; setSave('Saving to shared tracker…',true);
   try{
     const res=await fetch(SHARED_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({data:STATE})});
@@ -533,7 +541,7 @@ async function saveShared(){
   }catch(e){
     setSave('Shared save failed · changes kept in this browser',true);
     alert('Could not save to the shared tracker. Your changes remain in this browser. Please try Save again.');
-  }finally{publishing=false}
+  }finally{publishing=false;if(sharedSavePending){sharedSavePending=false;clearTimeout(sharedSaveTimer);sharedSaveTimer=setTimeout(()=>saveShared(),700)}}
 }
 async function loadShared(){
   setSave('Loading shared tracker…',true);
