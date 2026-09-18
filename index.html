@@ -377,7 +377,7 @@ function renderRows(){
       const f=el.getAttribute('data-f');
       const ev = el.tagName==='SELECT'||el.type==='date' ? 'change':'input';
       el.addEventListener(ev, ()=>{
-        const item=STATE.find(x=>x.id===id); if(!item)return;
+        const item=STATE.find(x=>String(x.id)===String(id)); if(!item)return;
         const val = el.isContentEditable ? el.textContent : el.value;
         item[f]=val;
         if(f==='status'){ el.className='st '+(STCLASS[val]||'st-ns'); refreshSummary(); }
