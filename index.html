@@ -554,7 +554,10 @@ window.addEventListener('message',e=>{
 async function loadShared(){
   setSave('Loading shared tracker…',true);
   if(IN_APPS_SCRIPT){
+    // Retry the handshake because the Apps Script parent may finish loading after this iframe.
     parent.postMessage({type:'V606_GET_DATA'},'*');
+    setTimeout(()=>parent.postMessage({type:'V606_GET_DATA'},'*'),600);
+    setTimeout(()=>parent.postMessage({type:'V606_GET_DATA'},'*'),1600);
     return;
   }
   try{
