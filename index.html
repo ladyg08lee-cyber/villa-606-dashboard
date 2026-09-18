@@ -477,7 +477,7 @@ function wireToolbar(){
 }
 
 function wireMeta(){document.querySelectorAll('[data-meta]').forEach(el=>el.addEventListener('input',()=>{META[el.getAttribute('data-meta')]=el.textContent.trim();persist()}))}
-function saveNow(){try{localStorage.setItem(LSKEY,JSON.stringify({t:Date.now(),s:STATE,g:EXTRA_GROUPS,m:META}));setSave('Saved to this browser · download HTML for another device',false)}catch(e){setSave('Browser save unavailable · download HTML now',true)}if(ARTIFACT)doPublish()}
+async function saveNow(){ await saveShared(); }
 function printReport(mode){
   if(mode==='current'&&F.folder==='All'){alert('Select a main folder first, then choose PDF · Current folder.');return;}
   const old={...F};
@@ -515,26 +515,36 @@ function downloadHTML(){
   setTimeout(()=>URL.revokeObjectURL(url),1200);setSave('Downloaded with latest changes',false);
 }
 
+const SHARED_API='https://script.google.com/macros/s/AKfycbx-vivjo4hnxRe63mCpSVBQUy1DD8dTKhSkhtOiJKyU9IzEaMsikuJNdov1Tr1BPWY/exec';
 let pubTimer=null, pending=false, publishing=false;
 function persist(){
   try{ localStorage.setItem(LSKEY, JSON.stringify({t:Date.now(), s:STATE, g:EXTRA_GROUPS, m:META})); }catch(e){}
-  setSave('Saving…',true);
-  pending=true;
-  clearTimeout(pubTimer);
-  pubTimer=setTimeout(doPublish, 900);
+  setSave('Unsaved changes · click Save',true);
 }
-async function doPublish(){
-  if(publishing){ return; }
-  if(!ARTIFACT){ setSave(capReady?'Saved to this browser':'Saving locally…', !capReady); pending=false; return; }
-  publishing=true; pending=false;
+async function saveShared(){
+  if(publishing)return;
+  publishing=true; setSave('Saving to shared tracker…',true);
   try{
-    await ARTIFACT.publish(buildDoc());
-    setSave('All changes saved',false);
+    const res=await fetch(SHARED_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({data:STATE})});
+    const out=await res.json();
+    if(!out.success)throw new Error(out.error||'Save failed');
+    try{localStorage.removeItem(LSKEY)}catch(e){}
+    setSave('Shared tracker saved · '+out.records+' records',false);
   }catch(e){
-    setSave('Save conflict — reloading latest',true);
-  }finally{
-    publishing=false;
-    if(pending){ pubTimer=setTimeout(doPublish,600); }
+    setSave('Shared save failed · changes kept in this browser',true);
+    alert('Could not save to the shared tracker. Your changes remain in this browser. Please try Save again.');
+  }finally{publishing=false}
+}
+async function loadShared(){
+  setSave('Loading shared tracker…',true);
+  try{
+    const res=await fetch(SHARED_API,{cache:'no-store'});
+    const out=await res.json();
+    if(!out.success||!Array.isArray(out.data))throw new Error(out.error||'Load failed');
+    STATE=out.data.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:r.date||'',rem:r.rem||'',link:r.link||''}));
+    render(); setSave('Shared tracker · latest data loaded',false);
+  }catch(e){
+    overlayLocal(); render(); setSave('Offline copy · shared data unavailable',true);
   }
 }
 
@@ -565,11 +575,7 @@ function overlayLocal(){
 }
 render();
 (async()=>{
-  if(window.claude&&claude.use){
-    ARTIFACT = await claude.use('artifact');
-  }
   capReady=true;
-  if(ARTIFACT){ setSave('All changes saved',false); }
-  else{ overlayLocal(); render(); setSave('Saving to this browser',true); }
+  await loadShared();
 })();
 </script></body></html>
