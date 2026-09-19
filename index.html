@@ -2,7 +2,7 @@
 /* ═══════════════════════════════════════════════════════════
    CONFIGURATION — Paste your Google Apps Script Web App URL
    ═══════════════════════════════════════════════════════════ */
-const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzd-Tj1BHM-w4xPVA-f8SEYdJBBZ8yGgVZpFrYkz8WPwaSqHR5gH7HZGjKR4ULl6ML3Sw/exec';
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbxgWkOdqvbszvqwAVMoPeBtRa-VDabk6bwEMWPe2rkgj-YOAsWpg6Y_jEYpkQ24rKXw/exec';
 /* ═══════════════════════════════════════════════════════════ */
 
 const CSS = `
@@ -387,6 +387,22 @@ function renderRows(){
   tb.querySelectorAll('.del').forEach(b=>b.addEventListener('click',()=>deleteRow(+b.getAttribute('data-del'))));
 }
 
+/* Normalize any date string to yyyy-MM-dd for <input type="date"> */
+function normalizeDate(d){
+  if(!d || d==='') return '';
+  // Already yyyy-MM-dd
+  if(/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  // dd/mm/yyyy or dd-mm-yyyy
+  let m = d.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  // Full JS Date string like "Thu Jul 09 2026 04:00:00 GMT+0400..."
+  try{ const dt=new Date(d); if(!isNaN(dt.getTime())){ return dt.toISOString().slice(0,10); } }catch(e){}
+  return '';
+}
+function normalizeRowDates(rows){
+  return rows.map(r=>({...r, date: normalizeDate(r.date)}));
+}
+
 function newId(){ return (STATE.reduce((m,r)=>Math.max(m,r.id||0),0))+1; }
 function addRow(){
   const main = (F.folder!=="All") ? F.folder : (Array.from(new Set(STATE.map(r=>r.main)))[0]||"01 – General");
@@ -533,7 +549,7 @@ async function loadFromSheet(){
     const data = await resp.json();
     if(data.error) throw new Error(data.error);
     if(data.rows && data.rows.length > 0){
-      STATE = data.rows.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:r.date||'',rem:r.rem||'',link:r.link||''}));
+      STATE = data.rows.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:normalizeDate(r.date||''),rem:r.rem||'',link:r.link||''}));
       EXTRA_GROUPS = data.groups || {};
       if(data.meta) META = {...META, ...data.meta};
       STATE.forEach(r=>{EXTRA_GROUPS[r.main]=EXTRA_GROUPS[r.main]||[];if(r.group&&!EXTRA_GROUPS[r.main].includes(r.group))EXTRA_GROUPS[r.main].push(r.group);});
@@ -612,7 +628,7 @@ function exportCSV(){
     try{
       const ls=JSON.parse(localStorage.getItem(LSKEY));
       if(ls&&Array.isArray(ls.s)){
-        STATE=ls.s.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:r.date||'',rem:r.rem||'',link:r.link||''}));
+        STATE=ls.s.map((r,i)=>({id:r.id||i+1,main:r.main||'',group:r.group||'',title:r.title||'',status:r.status||'Not Started',resp:r.resp||'',date:normalizeDate(r.date||''),rem:r.rem||'',link:r.link||''}));
         EXTRA_GROUPS=ls.g||EXTRA_GROUPS;
         if(ls.m)META={...META,...ls.m};
       }
